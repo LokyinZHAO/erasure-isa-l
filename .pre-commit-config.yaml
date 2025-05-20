@@ -1,0 +1,20 @@
+repos:
+- hooks:
+  - additional_dependencies:
+    - cz-conventional-gitmoji
+    id: commitizen
+  - additional_dependencies:
+    - cz-conventional-gitmoji
+    id: commitizen-branch
+    stages:
+    - pre-push
+  repo: https://github.com/commitizen-tools/commitizen
+  rev: v4.7.1
+- hooks:
+  - id: fmt
+  - id: cargo-check
+  - id: clippy
+    stages:
+    - pre-push
+  repo: https://github.com/doublify/pre-commit-rust
+  rev: v1.0
