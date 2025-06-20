@@ -181,6 +181,72 @@ impl ErasureCode {
         self.encode_impl(data, code)
     }
 
+    /// Update parities from a delta of a single source data block.
+    ///
+    /// This method is used to update the parity data from a single source data block
+    /// without re-encoding all the data blocks.
+    ///
+    /// This method can also be used with a part of updated source block, see in the example.
+    ///
+    /// # Arguments
+    /// * `index` - The index of the updated source data block.
+    /// * `delta` - The delta of the updated source data block, which is the xor of the old and new data.
+    /// * `code` - The code blocks to be updated with the new parity data.
+    ///
+    /// # Errors
+    /// The following errors can occur:
+    /// * `Error::InvalidArguments` - If the index is out of range `0..source_num()`.
+    /// * `Error::InvalidArguments` - The code blocks number is not equal to the code number,
+    /// * `Error::InvalidArguments` - If the input data or code blocks do not have the same length.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use erasure_isa_l::erasure::ErasureCode;
+    /// # use std::num::NonZeroUsize;
+    /// const BLOCK_LEN: usize = 1024;
+    /// let k = NonZeroUsize::new(4).unwrap();
+    /// let m = NonZeroUsize::new(2).unwrap();
+    /// let ec = ErasureCode::with_reed_solomon(k, m).unwrap();
+    /// let mut data: Vec<Vec<u8>> = (0..k.get()).map(|i| vec![i as u8; BLOCK_LEN]).collect();
+    /// let mut parity: Vec<Vec<u8>> = vec![vec![0u8; BLOCK_LEN]; m.get()];
+    /// ec.encode(&data, &mut parity).expect("Encoding failed");
+    /// // Update the second quarter of the first source data block
+    /// let update_index = 0;
+    /// let range = BLOCK_LEN / 4.. BLOCK_LEN / 2;
+    /// let delta = vec![0xCC_u8; range.len()];
+    /// let parity_slice = parity.iter_mut().map(|p| &mut p[range.clone()]).collect::<Vec<_>>();
+    /// ec.update(update_index, delta.as_slice(), parity_slice).expect("Update failed");
+    /// // The parity blocks are updated correctly
+    /// data[0][range.clone()].iter_mut().for_each(|x| *x ^= 0xCC);
+    /// let mut expected_parity: Vec<Vec<u8>> = vec![vec![0u8; BLOCK_LEN]; m.get()];
+    /// ec.encode(&data, &mut expected_parity).expect("Re-encoding failed");
+    /// assert_eq!(parity, expected_parity);
+    /// ```
+    pub fn update<U: AsMut<[u8]>>(
+        &self,
+        index: usize,
+        delta: &[u8],
+        mut code: impl AsMut<[U]>,
+    ) -> Result<(), Error> {
+        self.check_update(index, delta, &mut code)?;
+        // Update the data block at the given index
+        ec::encode_data_update(
+            delta.len().try_into().unwrap(),
+            self.k_i32(),
+            self.m_i32(),
+            index.try_into().unwrap(),
+            &self.encode_gf_table,
+            delta,
+            code.as_mut()
+                .iter_mut()
+                .map(AsMut::as_mut)
+                .map(<[u8]>::as_mut_ptr)
+                .collect::<Vec<_>>()
+                .as_mut_slice(),
+        );
+        Ok(())
+    }
+
     /// Decode the erased blocks from the surviving data and code blocks.
     ///
     /// The range of the blocks is `0..block_num()`.
@@ -462,6 +528,41 @@ impl ErasureCode {
         let row = erasures.len();
         let table = make_table_from_matrix(&matrix[0..(col * row)], col, row)?;
         Ok(DecodeTable(table))
+    }
+
+    fn check_update<U: AsMut<[u8]>>(
+        &self,
+        index: usize,
+        delta: &[u8],
+        mut code: impl AsMut<[U]>,
+    ) -> Result<(), Error> {
+        if index >= self.source_num() {
+            return Err(Error::invalid_arguments(format!(
+                "index {} is out of range, max index is source number {}",
+                index,
+                self.source_num() - 1
+            )));
+        }
+
+        if code.as_mut().len() != self.code_num() {
+            return Err(Error::invalid_arguments(format!(
+                "code length {} is not equal to code number {}",
+                code.as_mut().len(),
+                self.code_num()
+            )));
+        }
+
+        let len = delta.len();
+        for s in code.as_mut() {
+            if s.as_mut().len() != len {
+                return Err(Error::invalid_arguments(format!(
+                    "code block length {} is not equal to delta length {}",
+                    s.as_mut().len(),
+                    len
+                )));
+            }
+        }
+        Ok(())
     }
 
     fn check_encode_buffer<T: AsRef<[u8]>, U: AsMut<[u8]>>(

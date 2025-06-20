@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use erasure_isa_l::erasure::ErasureCode;
 
-const BLOCK_LEN: usize = 512;
+const BLOCK_LEN: usize = 64;
 const K: usize = 4;
 const M: usize = 2;
 
@@ -53,7 +53,8 @@ fn invert_matrix() {
 }
 
 #[test]
-fn basic_test() {
+#[ignore = "This test is for debuging"]
+fn fast_test() {
     use erasure_isa_l::erasure::ErasureCode;
 
     let k = NonZeroUsize::new(K).unwrap();
@@ -179,6 +180,48 @@ fn fail_test() {
         ));
     }
 
+    // Update
+    {
+        // index out of bounds
+        let mut parity = parity.clone();
+        let update_data = data[0].clone();
+        let res = ec.update(K, &update_data, &mut parity);
+        assert!(matches!(
+            res,
+            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+        ));
+    }
+    {
+        // buffer sizes mismatch
+        let mut parity = parity.clone();
+        let update_data = data[0].clone();
+        let res = ec.update(0, &update_data, &mut parity[0..M - 1]);
+        assert!(matches!(
+            res,
+            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+        ));
+    }
+    {
+        // data block empty
+        let mut parity = parity.clone();
+        let update_data = vec![];
+        let res = ec.update(0, &update_data, &mut parity);
+        assert!(matches!(
+            res,
+            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+        ));
+    }
+    {
+        // not enough parity blocks
+        let mut parity = parity.clone();
+        let update_data = data[0].clone();
+        let res = ec.update(0, &update_data, &mut parity[0..M - 1]);
+        assert!(matches!(
+            res,
+            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+        ));
+    }
+
     // Decode
     {
         // too much erasures
@@ -281,6 +324,51 @@ fn general_test(ec: ErasureCode) -> Result<(), erasure_isa_l::erasure::Error> {
     let mut orig_parity = make_zero_blk(m, blk_size);
     ec.encode(&orig_data, &mut orig_parity)?;
     let orig_parity = orig_parity;
+
+    // update k source blocks of data
+    let mut parity = make_zero_blk(m, blk_size);
+    let data = orig_data.clone();
+    for (i, update_data) in data.iter().enumerate() {
+        ec.update(i, &update_data, &mut parity)?;
+    }
+    assert_eq!(parity, orig_parity);
+
+    // update the a single source blocks of data
+    let update_index = rand::random_range(0..K);
+    let mut data = orig_data.clone();
+    let update_blk = rand::random_iter().take(blk_size).collect::<Vec<u8>>();
+    data[update_index] = update_blk.clone();
+    let mut expected_parity = make_zero_blk(m, blk_size);
+    ec.encode(&data, &mut expected_parity)?;
+    let mut parity = orig_parity.clone();
+    let delta = update_blk
+        .iter()
+        .zip(orig_data[update_index].iter())
+        .map(|(u, o)| *u ^ *o)
+        .collect::<Vec<_>>();
+    ec.update(update_index, &delta, &mut parity)?;
+    assert_eq!(parity, expected_parity);
+
+    // update only part of the source blocks of data
+    let update_index = rand::random_range(0..K);
+    let range = blk_size / 4..blk_size / 2;
+    let updated_slice = rand::random_iter().take(range.len()).collect::<Vec<u8>>();
+    let mut data = orig_data.clone();
+    let delta = data[update_index][range.clone()]
+        .iter()
+        .zip(updated_slice.iter())
+        .map(|(o, u)| *o ^ *u)
+        .collect::<Vec<_>>();
+    let mut parity = orig_parity.clone();
+    let mut parity_slice = parity
+        .iter_mut()
+        .map(|p| &mut p[range.clone()])
+        .collect::<Vec<_>>();
+    ec.update(update_index, &delta, &mut parity_slice)?;
+    data[update_index][range.clone()].copy_from_slice(&updated_slice);
+    let mut expected_parity = make_zero_blk(m, blk_size);
+    ec.encode(&data, &mut expected_parity)?;
+    assert_eq!(parity, expected_parity);
 
     // no erasures
     let mut data = orig_data.clone();

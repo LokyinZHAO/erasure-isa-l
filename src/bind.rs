@@ -92,7 +92,8 @@ pub mod ec {
     /// * `vec_i` - The vector index corresponding to the single input source.
     /// * `gf_tbls` - Pointer to array of input tables generated from coding
     ///   coefficients in init_tables(). Must be of size 32*k*rows.
-    /// * `data` - Pointer to single input source used to update output parity.
+    /// * `data` - Pointer to single input source used to update output parity,
+    ///   and this is the **delta** upon the previous data block.
     /// * `code` - Array of pointers to coded output buffers.
     pub fn encode_data_update(
         len: i32,
