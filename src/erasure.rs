@@ -12,7 +12,7 @@ pub enum Error {
     /// TooManyErasure: The number of erasures is larger than the maximum allowed,
     /// and the lost data cannot be recovered.
     #[error("Too Many Erased Blocks: {0} erased, up to {1} allowed")]
-    TooManyErasure(usize, usize),
+    TooManyErasures(usize, usize),
     /// InvalidArguments: The the input is invalid.
     #[error("Invalid Arguments: {0}")]
     InvalidArguments(String),
@@ -26,8 +26,8 @@ pub enum Error {
 
 #[allow(dead_code)]
 impl Error {
-    fn too_many_erasure(erasures: usize, max_erasures: usize) -> Self {
-        Self::TooManyErasure(erasures, max_erasures)
+    fn too_many_erasures(erasures: usize, max_erasures: usize) -> Self {
+        Self::TooManyErasures(erasures, max_erasures)
     }
 
     fn invalid_arguments(msg: impl Into<String>) -> Self {
@@ -90,6 +90,10 @@ impl ErasureCode {
     /// # Arguments
     /// * `source_num` - The number of source data blocks.
     /// * `code_num` - The number of code blocks.
+    ///
+    /// # Note
+    /// Any sub matrix from a cauchy matrix is always invertable, and it is suitable for large pairs
+    /// of `source_num` and `code_num`.
     pub fn with_cauchy(source_num: NonZeroUsize, code_num: NonZeroUsize) -> Result<Self, Error> {
         Self::new(
             source_num.get().try_into().unwrap(),
@@ -103,6 +107,21 @@ impl ErasureCode {
     /// # Arguments
     /// * `source_num` - The number of source data blocks.
     /// * `code_num` - The number of code blocks.  
+    ///
+    /// # Note
+    /// For large pairs of `source_num` and `code_num`, it is possible to find
+    /// cases where the decode matrix chosen from sources and parity is not invertable.
+    /// You may want to adjust for certain pairs `source_num` and `code_num`.
+    /// If the pair satisfies one of the following inequalities,
+    /// no adjustment is required:
+    /// * `source_num` <= 3
+    /// * `source_num` = 4, `code_num` <= 21
+    /// * `source_num` = 5, `code_num` <= 10
+    /// * `source_num`= 21, `code_num` =4
+    /// * `code_num` <= 3
+    ///
+    /// If your pair does not satisfy the above inequalities, and you don't want to adjust it,
+    /// you can use the [`with_cauchy`](Self::with_cauchy) method instead, which is always invertable.
     pub fn with_reed_solomon(
         source_num: NonZeroUsize,
         code_num: NonZeroUsize,
@@ -140,6 +159,19 @@ impl ErasureCode {
     /// * `Error::InvalidArguments` - If the data blocks number is not equal to the source number,
     ///   or the code blocks number is not equal to the code number.
     /// * `Error::InvalidArguments` - If the input data or code blocks do not have the same length
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use erasure_isa_l::erasure::ErasureCode;
+    /// # use std::num::NonZeroUsize;
+    /// const BLOCK_LEN: usize = 1024;
+    /// let k = NonZeroUsize::new(4).unwrap();
+    /// let m = NonZeroUsize::new(2).unwrap();
+    /// let ec = ErasureCode::with_reed_solomon(k, m).unwrap();
+    /// let data: Vec<Vec<u8>> = (0..k.get()).map(|i| vec![i as u8; BLOCK_LEN]).collect();
+    /// let mut parity: Vec<Vec<u8>> = vec![vec![0u8; BLOCK_LEN]; m.get()];
+    /// ec.encode(&data, &mut parity).expect("Encoding failed");
+    /// ```
     pub fn encode<T: AsRef<[u8]>, U: AsMut<[u8]>>(
         &self,
         data: impl AsRef<[T]>,
@@ -173,23 +205,48 @@ impl ErasureCode {
     ///   inverting the matrix.
     ///   
     /// # Note
-    /// The order of the indices in `erasures` does not matter, but they must be unique.
-    /// The duplicated indices will be treated as multiple erasures of the same block,
-    /// and the result is undefined.
+    /// The order of the indices in `erasures` does not matter, and the duplicated indices will
+    /// be treated as one erasure of the same block. So it is possible to pass a vector with
+    /// more than the code number of erasures.
     ///
     /// A `DecodeTable` will be generated internally to perform the decoding, which is time consuming.
     /// If you need to decode multiple times with the same erasures, you can use [`make_decode_table`](Self::make_decode_table) to generate a
     /// `DecodeTable` and pass it to [`decode_with_table`](Self::decode_with_table) to avoid the overhead.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use erasure_isa_l::erasure::ErasureCode;
+    /// # use std::num::NonZeroUsize;
+    /// const BLOCK_LEN: usize = 1024;
+    /// let k = NonZeroUsize::new(4).unwrap();
+    /// let m = NonZeroUsize::new(2).unwrap();
+    /// let code = ErasureCode::with_reed_solomon(k, m).unwrap();
+    /// let ec = ErasureCode::with_reed_solomon(k, m).unwrap();
+    /// let data: Vec<Vec<u8>> = (0..k.get()).map(|i| vec![i as u8; BLOCK_LEN]).collect();
+    /// let mut parity: Vec<Vec<u8>> = vec![vec![0u8; BLOCK_LEN]; m.get()];
+    /// ec.encode(&data, &mut parity).expect("Encoding failed");
+    /// // Simulate erasures
+    /// let mut erasures = vec![2, 5]; // Assume blocks 2 and 5 are erased
+    /// let mut erased_data: Vec<Vec<u8>> = data.clone();
+    /// erased_data[2] = vec![0; BLOCK_LEN];
+    /// let mut erased_parity: Vec<Vec<u8>> = parity.clone();
+    /// erased_parity[1] = vec![0; BLOCK_LEN];
+    /// // Decode the erased blocks
+    /// ec.decode(&mut erased_data, &mut erased_parity, erasures).expect("Decoding failed");
+    /// // Verify that the erased blocks are recovered
+    /// assert_eq!(&data, &erased_data);
+    /// assert_eq!(&parity, &erased_parity);
+    /// ```
     pub fn decode<U: AsMut<[u8]>>(
         &self,
         mut data: impl AsMut<[U]>,
         mut code: impl AsMut<[U]>,
-        erasures: &[usize],
+        mut erasures: Vec<usize>,
     ) -> Result<(), Error> {
-        self.check_decode_erasure(erasures)?;
+        self.check_decode_erasure(&mut erasures)?;
         self.check_decode_buffer(&mut data, &mut code)?;
-        let decode_gf_table = self.make_decode_table_impl(erasures)?;
-        self.decode_impl(data, code, &decode_gf_table.0, erasures)
+        let decode_gf_table = self.make_decode_table_impl(erasures.as_slice())?;
+        self.decode_impl(data, code, &decode_gf_table.0, erasures.as_slice())
     }
 
     /// Decode the erased blocks from the surviving data and code blocks using a pre-generated `DecodeTable`.
@@ -210,37 +267,79 @@ impl ErasureCode {
     /// * `code` - The code blocks.
     /// * `decode_table` - The pre-generated `DecodeTable` for decoding.
     /// * `erasures` - The indices of the erased blocks.
-    ///     
+    ///   
+    /// # Errors
+    /// The following errors can occur:
+    /// * `Error::TooManyErasure` - If the number of erasures is larger than the code number.
+    /// * `Error::InvalidArguments` - If the erasure indices are out of range.
+    /// * `Error::InvalidArguments` - If the data blocks number is not equal to the source number,
+    ///   or the code blocks number is not equal to the code number.
+    /// * `Error::InvalidArguments` - If the input data or code blocks do not have the same length
+    /// * `Error::InternalError` - If the internal error occurs while decoding, typically due to a failure when
+    ///   inverting the matrix.
+    ///   
     /// # Note
-    /// The order of the indices in `erasures` does not matter, but they must be unique.
-    /// The duplicated indices will be treated as multiple erasures of the same block,
-    /// and the result is undefined.
-    ///
     /// The `decode_table` must be generated with the same erasures as the `erasures` argument.
     /// Otherwise, the decoding result is undefined.
+    ///
+    /// The order of the indices in `erasures` does not matter, and the duplicated indices will
+    /// be treated as one erasure of the same block. So it is possible to pass a vector with
+    /// more than the code number of erasures.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use erasure_isa_l::erasure::{ErasureCode, DecodeTable};
+    /// # use std::num::NonZeroUsize;
+    /// const BLOCK_LEN: usize = 1024;
+    /// let k = NonZeroUsize::new(4).unwrap();
+    /// let m = NonZeroUsize::new(2).unwrap();
+    /// let ec = ErasureCode::with_reed_solomon(k, m).unwrap();
+    /// let data: Vec<Vec<u8>> = (0..k.get()).map(|i| vec![i as u8; BLOCK_LEN]).collect();
+    /// let mut parity: Vec<Vec<u8>> = vec![vec![0u8; BLOCK_LEN]; m.get()];
+    /// ec.encode(&data, &mut parity).expect("Encoding failed");
+    /// // Simulate erasures
+    /// let mut erasures = vec![2, 5]; // Assume blocks 2 and 5 are erased
+    /// let mut erased_data: Vec<Vec<u8>> = data.clone();
+    /// erased_data[2] = vec![0; BLOCK_LEN];
+    /// let mut erased_parity: Vec<Vec<u8>> = parity.clone();
+    /// erased_parity[1] = vec![0; BLOCK_LEN];
+    /// // Generate a decode table for the erasures
+    /// let decode_table = ec.make_decode_table(erasures.clone()).expect("Failed to make decode table");
+    /// // Decode the erased blocks using the decode table
+    /// ec.decode_with_table(&mut erased_data, &mut erased_parity, &decode_table, erasures).expect("Decoding failed");
+    /// // Verify that the erased blocks are recovered
+    /// assert_eq!(&data, &erased_data);
+    /// assert_eq!(&parity, &erased_parity);
+    /// ```
     pub fn decode_with_table<U>(
         &self,
         mut data: impl AsMut<[U]>,
         mut code: impl AsMut<[U]>,
         decode_table: &DecodeTable,
-        erasures: &[usize],
+        mut erasures: Vec<usize>,
     ) -> Result<(), Error>
     where
         U: AsMut<[u8]>,
     {
-        self.check_decode_erasure(erasures)?;
+        self.check_decode_erasure(&mut erasures)?;
         self.check_decode_buffer(&mut data, &mut code)?;
-        self.decode_impl(data, code, &decode_table.0, erasures)
+        self.decode_impl(data, code, &decode_table.0, erasures.as_mut_slice())
     }
 
     /// Generates a `DecodeTable` for the given erasures.
     ///
+    /// # Errors
+    /// The following errors can occur:
+    /// * `Error::TooManyErasure` - If the number of erasures is larger than the code number.
+    /// * `Error::InvalidArguments` - If the erasure indices are out of range.
+    ///
+    /// # Note
     /// The order of the indices in `erasures` does not matter, but they must be unique.
     /// The duplicated indices will be treated as multiple erasures of the same block,
     /// and the result is undefined.
-    pub fn make_decode_table(&self, erasures: &[usize]) -> Result<DecodeTable, Error> {
-        self.check_decode_erasure(erasures)?;
-        self.make_decode_table_impl(erasures)
+    pub fn make_decode_table(&self, mut erasures: Vec<usize>) -> Result<DecodeTable, Error> {
+        self.check_decode_erasure(&mut erasures)?;
+        self.make_decode_table_impl(erasures.as_mut_slice())
     }
 }
 
@@ -435,9 +534,11 @@ impl ErasureCode {
         Ok(())
     }
 
-    fn check_decode_erasure(&self, erasures: &[usize]) -> Result<(), Error> {
+    fn check_decode_erasure(&self, erasures: &mut Vec<usize>) -> Result<(), Error> {
+        erasures.sort_unstable();
+        erasures.dedup();
         if erasures.len() > self.code_num() {
-            return Err(Error::too_many_erasure(erasures.len(), self.code_num()));
+            return Err(Error::too_many_erasures(erasures.len(), self.code_num()));
         }
         if erasures.iter().any(|e| *e >= self.block_num()) {
             return Err(Error::invalid_arguments(format!(
