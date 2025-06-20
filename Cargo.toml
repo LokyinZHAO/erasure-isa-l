@@ -1,6 +1,6 @@
 [package]
 name = "erasure-isa-l"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Bindings to the isa-l library for erasure coding operations"
 repository = "https://github.com/LokyinZHAO/erasure-isa-l"
