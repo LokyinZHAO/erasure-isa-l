@@ -181,6 +181,22 @@ impl ErasureCode {
         self.encode_impl(data, code)
     }
 
+    /// Encodes the source data into code blocks and returns the code blocks as `Vec<Vec<u8>>`.
+    ///
+    /// This is a convenience method that allocates a new `Vec<Vec<u8>>` for the code blocks,
+    /// and encodes the data into it.
+    ///
+    /// See [`encode`](Self::encode) for more details on encoding.
+    pub fn encode_to_owned<T: AsRef<[u8]>>(
+        &self,
+        data: impl AsRef<[T]>,
+    ) -> Result<Vec<Vec<u8>>, Error> {
+        let len = data.as_ref().first().unwrap().as_ref().len();
+        let mut code = vec![vec![0_u8; len]; self.code_num()];
+        self.encode(data, &mut code)?;
+        Ok(code)
+    }
+
     /// Update parities from a delta of a single source data block.
     ///
     /// This method is used to update the parity data from a single source data block
