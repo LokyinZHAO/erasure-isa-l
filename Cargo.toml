@@ -11,7 +11,7 @@ keywords = ["intel", "isa-l", "bindings", "storage", "erasure-coding"]
 authors = ["Lokyin ZHAO <lokyinzhao.work@icloud.com>"]
 
 [dependencies]
-erasure-isa-l-sys = "1.0.1"
+erasure-isa-l-sys = "1.0.2"
 thiserror = "2.0.12"
 
 [dev-dependencies]
