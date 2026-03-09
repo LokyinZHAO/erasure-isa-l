@@ -25,7 +25,7 @@ impl GaloisFiledTable {
         Ok(Self(gf_table))
     }
 
-    pub fn as_ref(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
 }
@@ -127,7 +127,7 @@ where
     gf::vect_dot_prod(
         len.try_into().unwrap(),
         source.len().try_into().unwrap(),
-        &table,
+        table,
         &src_ptrs,
         dest,
     );
@@ -199,7 +199,7 @@ pub fn mul_add(
         len.try_into().unwrap(),
         source_num.try_into().unwrap(),
         index.try_into().unwrap(),
-        &table,
+        table,
         source_i,
         dest,
     );

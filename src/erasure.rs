@@ -487,7 +487,7 @@ impl ErasureCode {
         let cols = self.k as usize;
         let rows = erasures.len();
         let decode_matrix = &matrix[0..(cols * rows)];
-        let table = galois::GaloisFiledTable::try_from_matrix(&decode_matrix, rows, cols)?;
+        let table = galois::GaloisFiledTable::try_from_matrix(decode_matrix, rows, cols)?;
         Ok(DecodeTable(table))
     }
 
