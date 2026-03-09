@@ -20,7 +20,7 @@ jobs:
       - name: setup environment
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: autoconf automake libtool libclang-dev
+          packages: autoconf automake libtool libclang-dev nasm
           version: 1.0
       - name: cache rust artifacts
         uses: Swatinem/rust-cache@v2

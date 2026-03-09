@@ -11,7 +11,7 @@ keywords = ["intel", "isa-l", "bindings", "storage", "erasure-coding"]
 authors = ["Lokyin ZHAO <lokyinzhao.work@icloud.com>"]
 
 [dependencies]
-erasure-isa-l-sys = { path = "../erasure-isa-l-sys", default-features = false, features = [
+erasure-isa-l-sys = { version = "1.1.0", default-features = false, features = [
     "from_source",
 ] }
 thiserror = "2.0.12"
