@@ -160,14 +160,14 @@ fn fail_test() {
         let res = ec.encode(&data[0..K - 1], &mut parity);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
         let res = ec.encode(&data, &mut parity[0..M - 1]);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -176,7 +176,7 @@ fn fail_test() {
         let res = ec.encode(&data_not_same_len, &mut parity[0..M - 1]);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
 
@@ -188,7 +188,7 @@ fn fail_test() {
         let res = ec.update(K, &update_data, &mut parity);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -198,7 +198,7 @@ fn fail_test() {
         let res = ec.update(0, &update_data, &mut parity[0..M - 1]);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -208,7 +208,7 @@ fn fail_test() {
         let res = ec.update(0, &update_data, &mut parity);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -218,7 +218,7 @@ fn fail_test() {
         let res = ec.update(0, &update_data, &mut parity[0..M - 1]);
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
 
@@ -231,7 +231,7 @@ fn fail_test() {
         let res = ec.decode(&mut erased_data, &mut erased_parity, erasures.to_vec());
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::TooManyErasures(..))
+            Err(erasure_isa_l::Error::TooManyErasures(..))
         ));
     }
     {
@@ -243,7 +243,7 @@ fn fail_test() {
         let res = ec.decode(&mut erased_data, &mut erased_parity, erasures.to_vec());
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -254,7 +254,7 @@ fn fail_test() {
         let res = ec.decode(&mut erased_data, &mut erased_parity, erasures.to_vec());
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
     {
@@ -269,7 +269,7 @@ fn fail_test() {
         );
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
         let res = ec.decode(
             &mut erased_data,
@@ -278,7 +278,7 @@ fn fail_test() {
         );
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
 
@@ -289,7 +289,7 @@ fn fail_test() {
         let res = ec.make_decode_table(erasures.to_vec());
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::TooManyErasures(..))
+            Err(erasure_isa_l::Error::TooManyErasures(..))
         ));
     }
     {
@@ -298,7 +298,7 @@ fn fail_test() {
         let res = ec.make_decode_table(erasures.to_vec());
         assert!(matches!(
             res,
-            Err(erasure_isa_l::erasure::Error::InvalidArguments(..))
+            Err(erasure_isa_l::Error::InvalidArguments(..))
         ));
     }
 }
@@ -313,7 +313,7 @@ fn make_zero_blk(n: usize, blk_size: usize) -> Vec<Vec<u8>> {
     (0..n).map(|_| vec![0_u8; blk_size]).collect()
 }
 
-fn general_test(ec: ErasureCode) -> Result<(), erasure_isa_l::erasure::Error> {
+fn general_test(ec: ErasureCode) -> Result<(), erasure_isa_l::Error> {
     let k = ec.source_num();
     let m = ec.code_num();
     let n = ec.block_num();
