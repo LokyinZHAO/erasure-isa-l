@@ -94,6 +94,39 @@ impl ErasureCode {
         (self.k + self.m) as usize
     }
 
+    /// Computes the dot product of the source data blocks with the encoding matrix.
+    ///
+    /// # See also
+    /// [galois::dot_prod] for more details on the dot product operation.
+    pub fn dot_prod<T>(&self, sources: impl AsRef<[T]>, dest: &mut [u8]) -> Result<(), Error>
+    where
+        T: AsRef<[u8]>,
+    {
+        galois::dot_prod(&self.encode_gf_table, sources, dest)
+    }
+
+    /// Computes the multiply and add operation of the source data blocks with the encoding matrix.
+    ///
+    /// # See also
+    /// [galois::mul_add] for more details on the multiply and add operation.
+    pub fn mul_add<T>(
+        &self,
+        source_index: usize,
+        source: &[u8],
+        dest: &mut [u8],
+    ) -> Result<(), Error>
+    where
+        T: AsRef<[u8]>,
+    {
+        galois::mul_add(
+            &self.encode_gf_table,
+            self.source_num(),
+            source_index,
+            source,
+            dest,
+        )
+    }
+
     /// Encodes the source data into code blocks.
     ///
     /// # Arguments

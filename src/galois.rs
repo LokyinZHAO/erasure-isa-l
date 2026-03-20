@@ -5,6 +5,15 @@ use crate::{Error, gf};
 pub struct GaloisFiledTable(Vec<u8>);
 
 impl GaloisFiledTable {
+    /// Creates a Galois field table from a given matrix.
+    ///
+    /// # Arguments
+    /// * `matrix` - A slice representing the matrix, which must have a length of `rows * cols`.
+    /// * `rows` - The number of rows in the matrix.
+    /// * `cols` - The number of columns in the matrix.
+    ///
+    /// # Errors
+    /// * Returns an `Error::invalid_arguments` if the length of the matrix does not match `rows * cols`.
     pub fn try_from_matrix(matrix: &[u8], rows: usize, cols: usize) -> Result<Self, Error> {
         if matrix.len() != rows * cols {
             return Err(Error::invalid_arguments(format!(
